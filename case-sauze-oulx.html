@@ -786,7 +786,7 @@ function rankOf(id){
 // 2) window.storage di Claude.ai (solo se aperto dentro claude.ai)
 // 3) localStorage del browser (solo se window.storage non è disponibile, es. Google Sites) -> salva solo su QUESTO dispositivo/browser
 // In ogni caso resta sempre disponibile Esporta/Importa per un backup manuale.
-const SYNC_API_URL = ""; // <-- incolla qui l'URL "/exec" del tuo Google Apps Script Web App, tra le virgolette
+const SYNC_API_URL = "https://script.google.com/macros/s/AKfycbwNWGShby1JRzHaMMfx9yUf7GBjNN0f5RavH0BoHX8_B1ULgHJ2S3b7uFzdX1akntA3/exec";
 
 let trackingState = {}; // { id: {status, notes, visitOutcome, visitRating, visitPrice} }
 const STORAGE_KEY = "case-sauze-tracking";
@@ -833,10 +833,19 @@ async function loadTracking(){
   PROPERTIES.forEach(p=>{
     trackingState[p.id] = normalizeTrackingEntry(trackingState[p.id]);
   });
+
+  // Se il backend condiviso è configurato, invia subito indirizzi e stato
+  // corrente: crea eventuali righe mancanti (case nuove) senza aspettare
+  // una modifica manuale, e mantiene il Sheet sempre allineato al dataset.
+  if(SYNC_API_URL){
+    saveTracking();
+  }
 }
 
 async function saveTracking(){
-  const payload = JSON.stringify(trackingState);
+  const addresses = {};
+  PROPERTIES.forEach(p=>{ addresses[p.id] = p.address; });
+  const payload = JSON.stringify({trackingState, addresses});
 
   if(SYNC_API_URL){
     try{
@@ -844,11 +853,12 @@ async function saveTracking(){
     }catch(e){ /* offline: verrà ritentato al prossimo salvataggio */ }
   }
 
+  const localPayload = JSON.stringify(trackingState);
   if(hasClaudeStorage){
-    try{ await window.storage.set(STORAGE_KEY, payload, false); }
+    try{ await window.storage.set(STORAGE_KEY, localPayload, false); }
     catch(e){ /* ignora */ }
   } else {
-    try{ localStorage.setItem(STORAGE_KEY, payload); }
+    try{ localStorage.setItem(STORAGE_KEY, localPayload); }
     catch(e){ /* ignora */ }
   }
 }
